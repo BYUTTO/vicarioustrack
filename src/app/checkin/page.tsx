@@ -153,6 +153,17 @@ export default function CheckinPage() {
             {allAnswered ? 'Submit check-in' : `Answer all ${total} items to submit (${total - answered} left)`}
           </Button>
         </div>
+
+        {/* Instrument attribution + licensing — shown where the scales are actually administered */}
+        <div className="border-t border-slate-200 mt-2 pt-4 pb-2">
+          <p className="text-xs text-slate-400 leading-relaxed">
+            <span className="font-medium text-slate-500">Instrument attribution.</span>{' '}
+            <span className="font-medium">ProQOL-5</span> © B. Hudnall Stamm (2009) — used with attribution; items unaltered, not for sale.{' '}
+            <span className="font-medium">Secondary Traumatic Stress Scale (STSS)</span> © 1999 Brian E. Bride; from Bride, Robinson, Yegidis &amp; Figley (2004).
+            The STSS is shown here for demonstration only — <span className="text-slate-500">commercial use requires written permission from the author.</span>{' '}
+            Neither instrument is diagnostic.
+          </p>
+        </div>
       </div>
     </div>
   );
