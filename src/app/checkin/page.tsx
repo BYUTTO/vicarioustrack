@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { PROQOL5, STSS, renderItemText, scoreProqolSubscale, scoreStss, type Instrument } from '@/lib/instruments';
+import { useClinicians, todayISO } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { HeartPulse, ChevronLeft, CheckCircle, Sparkles, ArrowRight } from 'lucide-react';
@@ -12,8 +13,12 @@ const SEV_COLOR: Record<string, string> = {
 };
 
 export default function CheckinPage() {
+  const { clinicians, submitCheckIn } = useClinicians();
+  const [asId, setAsId] = useState('c2'); // default: Marcus Webb (stable → flips on the dashboard)
   const [responses, setResponses] = useState<Record<string, number>>({});
   const [submitted, setSubmitted] = useState(false);
+
+  const asClinician = clinicians.find(c => c.id === asId);
 
   const allItems = useMemo(() => [
     ...PROQOL5.items.map(i => ({ key: `proqol-${i.number}`, instrument: PROQOL5, ...i })),
@@ -25,6 +30,23 @@ export default function CheckinPage() {
   const allAnswered = answered === total;
 
   const setAnswer = (key: string, value: number) => setResponses(r => ({ ...r, [key]: value }));
+
+  const handleSubmit = () => {
+    const proqolResp: Record<number, number> = {};
+    PROQOL5.items.forEach(i => { proqolResp[i.number] = responses[`proqol-${i.number}`]; });
+    const stssResp: Record<number, number> = {};
+    STSS.items.forEach(i => { stssResp[i.number] = responses[`stss-${i.number}`]; });
+    const cs = scoreProqolSubscale(proqolResp, 'compassion_satisfaction');
+    const bo = scoreProqolSubscale(proqolResp, 'burnout');
+    const sts = scoreProqolSubscale(proqolResp, 'secondary_traumatic_stress');
+    const stss = scoreStss(stssResp);
+    submitCheckIn(asId, {
+      date: todayISO(),
+      cs: cs.raw, bo: bo.raw, sts: sts.raw,
+      stssTotal: stss.total, intrusion: stss.intrusion, avoidance: stss.avoidance, arousal: stss.arousal,
+    });
+    setSubmitted(true);
+  };
 
   const autoFill = () => {
     // Demo affordance: fill plausible moderate responses so a walkthrough isn't 47 clicks.
@@ -56,7 +78,7 @@ export default function CheckinPage() {
           <div className="text-center mb-6">
             <div className="h-12 w-12 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-3"><CheckCircle className="h-6 w-6 text-emerald-600" /></div>
             <h1 className="text-xl font-bold text-slate-900">Check-in complete</h1>
-            <p className="text-sm text-slate-500 mt-1">Thanks. Your scores are recorded for this week. Here&apos;s your private summary.</p>
+            <p className="text-sm text-slate-500 mt-1">Recorded for {asClinician?.name} this week. Here&apos;s the private summary.</p>
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
@@ -80,7 +102,7 @@ export default function CheckinPage() {
           </div>
 
           <div className="flex gap-3 mt-5 justify-center">
-            <Link href="/dashboard"><Button className="bg-slate-900 hover:bg-slate-700 text-white gap-1.5">See the supervisor view <ArrowRight className="h-4 w-4" /></Button></Link>
+            <Link href={`/dashboard?updated=${asId}`}><Button className="bg-slate-900 hover:bg-slate-700 text-white gap-1.5">See {asClinician?.name.split(' ')[0]} on the dashboard <ArrowRight className="h-4 w-4" /></Button></Link>
             <Button variant="outline" onClick={() => { setSubmitted(false); setResponses({}); }}>Start over</Button>
           </div>
           <p className="text-xs text-slate-400 text-center mt-4">ProQOL-5 is not diagnostic. Scores screen for professional quality of life; clinical interpretation belongs with a qualified supervisor.</p>
@@ -93,9 +115,21 @@ export default function CheckinPage() {
     <div className="min-h-screen bg-slate-50">
       <CheckinNav />
       <div className="max-w-2xl mx-auto px-4 py-8">
-        <div className="mb-6">
+        <div className="mb-5">
           <h1 className="text-xl font-bold text-slate-900">Weekly Check-in</h1>
           <p className="text-sm text-slate-500 mt-1">Two brief validated scales. Answer honestly for the timeframe noted — about 5 minutes.</p>
+        </div>
+
+        {/* Demo affordance: which clinician is completing this — drives where it lands on the dashboard */}
+        <div className="bg-white rounded-xl border border-slate-200 p-3.5 mb-4 flex items-center gap-3">
+          <div className="h-8 w-8 rounded-full bg-rose-100 flex items-center justify-center text-xs font-bold text-rose-700 shrink-0">{asClinician?.avatar}</div>
+          <div className="flex-1">
+            <label className="text-xs text-slate-500 block">Completing as</label>
+            <select value={asId} onChange={e => setAsId(e.target.value)} className="text-sm font-medium text-slate-900 bg-transparent focus:outline-none">
+              {clinicians.map(c => <option key={c.id} value={c.id}>{c.name} — {c.role}</option>)}
+            </select>
+          </div>
+          <span className="text-xs text-slate-400 hidden sm:block">Your submission updates this clinician on the supervisor dashboard.</span>
         </div>
 
         {/* Sticky progress + demo autofill */}
@@ -115,7 +149,7 @@ export default function CheckinPage() {
         <InstrumentSection instrument={STSS} responses={responses} onAnswer={setAnswer} keyPrefix="stss" />
 
         <div className="sticky bottom-0 bg-gradient-to-t from-slate-50 via-slate-50 to-transparent pt-6 pb-4">
-          <Button onClick={() => setSubmitted(true)} disabled={!allAnswered} className="w-full bg-rose-500 hover:bg-rose-600 text-white disabled:bg-slate-200">
+          <Button onClick={handleSubmit} disabled={!allAnswered} className="w-full bg-rose-500 hover:bg-rose-600 text-white disabled:bg-slate-200">
             {allAnswered ? 'Submit check-in' : `Answer all ${total} items to submit (${total - answered} left)`}
           </Button>
         </div>

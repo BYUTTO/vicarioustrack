@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { CLINICIANS, clinicianAlertLevel, supervisionPrompts, stssSeverity, proqolBand, type Clinician, type AlertLevel } from '@/lib/demo-data';
+import { clinicianAlertLevel, supervisionPrompts, stssSeverity, proqolBand, type Clinician, type AlertLevel } from '@/lib/demo-data';
+import { useClinicians, todayISO } from '@/lib/store';
 import { STSS_CLINICAL_THRESHOLD } from '@/lib/instruments';
 import { Sparkline } from '@/components/Sparkline';
 import { Badge } from '@/components/ui/badge';
-import { HeartPulse, ChevronLeft, AlertTriangle, AlertCircle, CheckCircle, X, CalendarX } from 'lucide-react';
+import { HeartPulse, ChevronLeft, AlertTriangle, AlertCircle, CheckCircle, X, CalendarX, RotateCcw, Sparkles } from 'lucide-react';
 
 const ALERT_CFG: Record<AlertLevel, { label: string; color: string; icon: React.ReactNode }> = {
   urgent: { label: 'Urgent', color: 'bg-red-100 text-red-700 border-red-200', icon: <AlertTriangle className="h-3.5 w-3.5" /> },
@@ -19,12 +20,21 @@ const SEV_COLOR: Record<string, string> = {
 };
 
 export default function DashboardPage() {
+  const { clinicians, reset } = useClinicians();
   const [selectedId, setSelectedId] = useState<string | null>('c1');
+  const [updatedId, setUpdatedId] = useState<string | null>(null);
 
-  const rows = CLINICIANS.map(c => ({ c, alert: clinicianAlertLevel(c), latest: c.history[c.history.length - 1] }));
+  // Honor /dashboard?updated=<id> from a just-submitted check-in: select + highlight it.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('updated');
+    if (id) { setSelectedId(id); setUpdatedId(id); }
+  }, []);
+
+  const today = todayISO();
+  const rows = clinicians.map(c => ({ c, alert: clinicianAlertLevel(c), latest: c.history[c.history.length - 1] }));
   const urgent = rows.filter(r => r.alert === 'urgent').length;
   const attention = rows.filter(r => r.alert === 'attention').length;
-  const selected = selectedId ? CLINICIANS.find(c => c.id === selectedId) ?? null : null;
+  const selected = selectedId ? clinicians.find(c => c.id === selectedId) ?? null : null;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -34,7 +44,10 @@ export default function DashboardPage() {
         <span className="font-semibold text-sm">VicariousTrack</span>
         <span className="text-slate-300">/</span>
         <span className="text-sm text-slate-500">Supervisor Dashboard</span>
-        <span className="ml-auto text-xs text-slate-400">Cedar Valley Child Advocacy Center · Wk of {CLINICIANS[0].history.at(-1)?.date}</span>
+        <button onClick={reset} className="ml-auto flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-700 transition-colors" title="Reset demo data">
+          <RotateCcw className="h-3.5 w-3.5" /> Reset demo
+        </button>
+        <span className="text-xs text-slate-400">Cedar Valley CAC</span>
       </nav>
 
       <div className="max-w-5xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -43,7 +56,7 @@ export default function DashboardPage() {
           <div className="grid grid-cols-3 gap-3">
             <Stat label="Urgent" value={urgent} color="text-red-600" />
             <Stat label="Needs attention" value={attention} color="text-amber-600" />
-            <Stat label="Clinicians" value={CLINICIANS.length} color="text-slate-900" />
+            <Stat label="Clinicians" value={clinicians.length} color="text-slate-900" />
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -56,7 +69,11 @@ export default function DashboardPage() {
                   <button key={c.id} onClick={() => setSelectedId(c.id)} className={`w-full text-left px-5 py-3.5 hover:bg-slate-50 transition-colors flex items-center gap-3 ${selectedId === c.id ? 'bg-slate-50' : ''}`}>
                     <div className="h-9 w-9 rounded-full bg-rose-100 flex items-center justify-center text-xs font-bold text-rose-700 shrink-0">{c.avatar}</div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm text-slate-900">{c.name}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium text-sm text-slate-900">{c.name}</span>
+                        {updatedId === c.id && <span className="flex items-center gap-0.5 text-[10px] font-semibold text-rose-600 bg-rose-50 rounded px-1 py-0.5"><Sparkles className="h-2.5 w-2.5" />just updated</span>}
+                        {updatedId !== c.id && latest?.date === today && <span className="text-[10px] text-emerald-600">✓ this week</span>}
+                      </div>
                       <div className="text-xs text-slate-500 truncate">{c.role} · {c.caseloadNote}</div>
                     </div>
                     {c.missedWeeks >= 3 ? (
